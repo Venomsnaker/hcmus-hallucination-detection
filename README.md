@@ -1,2 +1,4 @@
-# hcmus-hallucination-detection
-Hallucination detection in artificial intelligence models
+# Hallucination Detection
+## Contributors
+- Venomsnaker
+- MinhQuan1909
