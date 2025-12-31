@@ -1,9 +1,11 @@
-import test
+import torch
 
+
+def check_cuda():
+    return torch.cuda.is_available()
 
 def main():
-    print("Checking CUDA availability:", test.check_cuda())
-    
+    return
 
 if __name__ == "__main__":
     main()
