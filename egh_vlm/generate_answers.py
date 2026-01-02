@@ -4,13 +4,32 @@ from tqdm import tqdm
 
 import torch
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+from egh_vlm.utils import map_response
 
-from egh_vlm.utils import load_pope_dataset, map_response, save_dataset
-from egh_vlm.model import get_response
+def save_dataset(filepath, dataset):
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(dataset, f, indent=4)
 
+def get_response(messages, model, processor, max_new_tokens=512):
+    inputs = processor.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_dict=True,
+        return_tensors="pt"
+    )
+    inputs = inputs.to(model.device)
+    with torch.no_grad():
+        generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+    generated_ids_trimmed = [
+        out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
+    output_text = processor.batch_decode(
+        generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+    return output_text[0] if len(output_text) == 1 else output_text
 
-def generate_answers(saved_filepath, sample_size, checkpoint_interval=20):
-    # Set up the model
+def generate_answers(saved_filepath, sample_size=None, checkpoint_interval=20):
+    # Set up
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         "Qwen/Qwen3-VL-2B-Instruct",
@@ -19,50 +38,47 @@ def generate_answers(saved_filepath, sample_size, checkpoint_interval=20):
     )
     processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-2B-Instruct")
 
-    # Set up the dataset
-    dataset = load_pope_dataset(split='test', sample_size=sample_size)
-    res = {}
+    dataset_path = "../data/hallusion_bench"
+    images_path = "/images/"
+    res = []
+
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        data_list = json.load(f)
+    if sample_size is not None and len(data_list) > sample_size:
+        data_list = data_list[:sample_size]
 
     if os.path.exists(saved_filepath):
-        with open(saved_filepath, 'r') as f:
+        with open(saved_filepath, 'r', encoding='utf-8') as f:
             res = json.load(f)
+    processed_ids = [data['id'] for data in res]
 
     # Get responses
     batch = []
 
-    for sample_id in tqdm(dataset.keys(), desc="Processing POPE samples:"):
-        if sample_id in res:
+    for sample in tqdm(data_list, desc="Processing Hallusion Bench samples:"):
+        if sample["id"] in processed_ids:
             continue
-        sample = dataset[sample_id]
+        image_path = images_path + sample['filename'][2:]
 
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": sample['image']},
-                    {"type": "text", "text": sample['question'] + " Answer only 'yes' or 'no'."},
+                    {"type": "image", "image": image_path},
+                    {"type": "text", "text": sample['question'] + " Answer in this format: yes/no, explain"},
                 ],
             }
         ]
-        response = get_response(messages, model, processor, max_new_tokens=8)
-
-        item = {
-            'question_id': sample['question_id'],
-            'question': sample['question'],
-            'ground_truth': sample['ground_truth'],
-            'answer': response,
-            'label': map_response(response),
-        }
-        batch.append((sample_id, item))
+        response = get_response(messages, model, processor, max_new_tokens=512)
+        sample['qwenvl_answer'] = response
+        sample['hallucination'] = map_response(response)
+        batch.append(sample)
 
         if len(batch) >= checkpoint_interval:
-            for sid, item_data in batch:
-                res[sid] = item_data
+            res.extend(batch)
             save_dataset(saved_filepath, res)
             batch = []
     if batch:
-        for sid, item_data in batch:
-            res[sid] = item_data
+        res.extend(batch)
         save_dataset(saved_filepath, res)
-
     print(f"Completed. The total number of samples processed: {len(res)}")
