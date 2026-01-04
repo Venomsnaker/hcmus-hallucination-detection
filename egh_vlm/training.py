@@ -1,6 +1,6 @@
 import os
 import torch
-from sklearn.metrics import f1_score, accuracy_score, precision_recall_curve, auc
+from sklearn.metrics import accuracy_score, f1_score, precision_recall_curve, auc
 
 from egh_vlm.extract_feature import batch_extract_features
 from egh_vlm.hallucination_dataset import load_features, save_features

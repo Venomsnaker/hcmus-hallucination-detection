@@ -1,38 +1,40 @@
 import os
 import json
-from datasets import load_dataset
+from dataclasses import dataclass
+import torch
 
 
-def map_response(response):
-    if 'yes' in response.lower():
+@dataclass
+class ModelBundle:
+    model: any
+    processor: any
+    device: torch.device
+
+def get_verdict(response):
+    if 'yes' in response.strip()[:10].lower():
         return 1
     else:
         return 0
 
-def load_egh_dataset(dir_path, sample_size=None) -> list:
-    dataset_path = dir_path + '/dataset.json'
-    images_path = dir_path + '/images/'
+def load_egh_dataset(dir_path, file_name='egh_vlm.json', imgs_dir_name='images/', sample_size=None) -> list:
+    dataset_path = os.path.join(dir_path, file_name)
+    imgs_dir_path = os.path.join(dir_path, imgs_dir_name)
     dataset = []
 
-    with open(dataset_path, 'r') as f:
+    with open(dataset_path, 'r', encoding='utf-8') as f:
         data_list = json.load(f)
     if sample_size is not None and len(data_list) > sample_size:
         data_list = data_list[:sample_size]
 
     for data in data_list:
-        dataset.append({
-            "id": data['id'],
-            "image_path": images_path + data['image_id'],
-            "question": data['query'],
-            "answer": data['answer'],
-            "label": data['label']
-        })
+        data['image_path'] = imgs_dir_path + data['image_id']
+        dataset.append(data)
     print(f"Successfully load the EHG dataset with: {len(dataset)} samples.")
     return dataset
 
-def load_hallusion_bench_dataset(dir_path, sample_size=None) -> list:
-    dataset_path = dir_path + '/hallusion_bench.json'
-    images_path = dir_path + '/images/'
+def load_hallusion_bench_dataset(dir_path, file_name='hallusion_bench.json', imgs_dir_name='images/', sample_size=None) -> list:
+    dataset_path = os.path.join(dir_path, file_name)
+    images_path = os.path.join(dir_path, imgs_dir_name)
     dataset = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
@@ -53,24 +55,5 @@ def load_hallusion_bench_dataset(dir_path, sample_size=None) -> list:
             "label": data['hallucination'],
         })
     print(f"Successfully load the Hallusion Bench dataset with: {len(dataset)} samples.")
-    return dataset
-
-def load_pope_dataset(split="test", sample_size=None) -> dict:
-    pope_dataset = load_dataset('lmms-lab/POPE', split=split)
-    dataset = {}
-
-    if sample_size is not None and len(pope_dataset) > sample_size:
-        pope_dataset = pope_dataset.select(range(sample_size))
-
-    for sample in pope_dataset:
-        dataset[sample['id']] = {
-            'question_id': sample['question_id'],
-            'question': sample['question'],
-            'ground_truth': map_response(sample['answer']),
-            'image': sample['image'],
-            'image_source': sample['image_source'],
-            'category': sample['category'],
-        }
-    print(f"Successfully load the POPE dataset with: {len(dataset)} samples.")
     return dataset
 
