@@ -15,6 +15,12 @@ def get_verdict(response):
         return 1
     else:
         return 0
+    
+def save_dataset(dataset, file_path):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(dataset, f, indent=4)
 
 def load_egh_dataset(dir_path, file_name='egh_vlm.json', imgs_dir_name='images/', sample_size=None) -> list:
     dataset_path = os.path.join(dir_path, file_name)
