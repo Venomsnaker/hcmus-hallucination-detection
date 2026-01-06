@@ -99,3 +99,4 @@ def paired_hallucination_collate_fn(batch):
         embs2.append(sample[3])
         grads2.append(sample[4])
         labels.append(sample[5])
+    return ids, embs1, grads1, embs2, grads2, torch.tensor(labels)

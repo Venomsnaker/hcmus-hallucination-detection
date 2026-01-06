@@ -5,6 +5,7 @@ from sklearn.metrics import accuracy_score, f1_score, precision_recall_curve, au
 
 from egh_vlm.hallucination_detector import DetectorModule, PairedDetectorModule
 
+
 def train_detector(detector: DetectorModule, loss_function, optim, data_loader: DataLoader):
     total_loss = 0
 
@@ -39,9 +40,8 @@ def eval_detector(detector: DetectorModule, data_loader):
     total_label, total_pred, total_out = [], [], []
 
     with torch.no_grad():
-        for _, batch in enumerate(data_loader):
+        for batch_idx, batch in enumerate(data_loader):
             id, emb, grad, label = batch
-
             output = detector(emb, grad).squeeze()
             output = torch.nan_to_num(output, nan=1.0, posinf=1.0, neginf=0.0)
             total_out += output.tolist()
@@ -58,9 +58,8 @@ def eval_paired_detector(detector: PairedDetectorModule, data_loader: DataLoader
     total_label, total_pred, total_out = [], [], []
 
     with torch.no_grad():
-        for _, batch in enumerate(data_loader):
+        for batch_idx, batch in enumerate(data_loader):
             id, emb1, grad1, emb2, grad2, label = batch
-
             output = detector([[emb1, grad1], [emb2, grad2]]).squeeze()
             output = torch.nan_to_num(output, nan=1.0, posinf=1.0, neginf=0.0)
             total_out += output.tolist()

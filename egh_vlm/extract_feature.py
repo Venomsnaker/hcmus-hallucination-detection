@@ -64,9 +64,9 @@ def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = N
 
     context = []
 
-    if image_path is not None and mask_mode is not 'image':
+    if image_path is not None and mask_mode != 'image':
         context.append({"type": "image", "image": image_path})
-    if question is not None and mask_mode is not 'question':
+    if question is not None and mask_mode != 'question':
         context.append({"type": "text", "text": question})
     
     context_messages = [
@@ -81,6 +81,9 @@ def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = N
     return emb, grad
 
 def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None, save_path: str=None, save_interval=20):
+    '''
+    mask_mode: None, 'image' or 'question'
+    '''
     if mask_mode not in [None, 'image', 'question']:
         print('Incorrect mask mode')
         return None
