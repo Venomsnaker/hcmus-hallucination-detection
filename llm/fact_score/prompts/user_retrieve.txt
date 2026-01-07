@@ -1,0 +1,13 @@
+Break down the language model response into individual atomic facts.
+Response: {response}
+
+A fact must be a single sentence that conveys only one piece of information. 
+Do not combine two ideas in a single sentence. 
+Do not include explanations, summaries, or extra commentary.
+
+Return each fact on a new line in the format: 
+<fact_1> 
+<fact_2>
+<...>
+Only list the extracted facts in the requested format.
+
