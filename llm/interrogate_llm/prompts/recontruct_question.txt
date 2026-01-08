@@ -1,0 +1,5 @@
+You are given an answer. Your task is to generate the original question that was asked to get this answer.
+
+Answer: {answer}
+
+Only return the original question.
