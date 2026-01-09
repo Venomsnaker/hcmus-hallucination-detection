@@ -1,0 +1,5 @@
+Context: {context}
+
+Sentence: {sentence}
+
+Is the sentence supported by the context above? Answer only in 'yes' or 'no.
