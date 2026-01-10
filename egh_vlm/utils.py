@@ -63,3 +63,14 @@ def load_hallusion_bench_dataset(dir_path, file_name='hallusion_bench.json', img
     print(f"Successfully load the Hallusion Bench dataset with: {len(dataset)} samples.")
     return dataset
 
+def load_phd_dataset(dir_path, file_name="dataset.json", imgs_dir_name='images/', sample_size=None) -> list:
+    dataset_path = os.path.join(dir_path, file_name)
+    images_path = os.path.join(dir_path, imgs_dir_name)
+
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        data_list = json.load(f)
+    if sample_size is not None and len(data_list) > sample_size:
+        data_list = data_list[:sample_size]
+
+    print(f"Successfully load the Hallusion Bench dataset with: {len(data_list)} samples.")
+    return data_list
