@@ -56,17 +56,17 @@ def extract_features_pipeline(model_bundle: ModelBundle, context_messages: list,
 
 def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None):
     '''
-    mask_mode: None, 'image' or 'question'
+    mask_mode: None, "image" or "question"
     '''
-    if mask_mode not in [None, 'image', 'question']:
-        print('Incorrect mask mode')
+    if mask_mode not in [None, "image", "question"]:
+        print("Incorrect mask mode")
         return None
 
     context = []
 
-    if image_path is not None and mask_mode != 'image':
+    if image_path is not None and mask_mode != "image":
         context.append({"type": "image", "image": image_path})
-    if question is not None and mask_mode != 'question':
+    if question is not None and mask_mode != "question":
         context.append({"type": "text", "text": question})
     
     context_messages = [
@@ -82,27 +82,27 @@ def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = N
 
 def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None, save_path: str=None, save_interval=20):
     '''
-    mask_mode: None, 'image' or 'question'
+    mask_mode: None, "image" or "question"
     '''
-    if mask_mode not in [None, 'image', 'question']:
-        print('Incorrect mask mode')
+    if mask_mode not in [None, "image", "question"]:
+        print("Incorrect mask mode")
         return None
 
     dataset = HallucinationDataset()
 
-    for data in tqdm(data_list, desc='Extract features:'):
+    for data in tqdm(data_list, desc="Extract features:"):
         emb, grad = extract_features(
             model_bundle,
-            answer = data['answer'],
-            image_path = data['image_path'],
-            question=data['question'],
+            answer = data["answer"],
+            image_path = data["image_path"],
+            question=data["question"],
             mask_mode=mask_mode
         )
 
         # Exclude empty, NaN, and inf features 
         if emb.numel() > 0 and grad.numel() > 0:
             if not torch.isnan(emb).any() and not torch.isinf(emb).any() and not torch.isnan(grad).any() and not torch.isinf(grad).any():
-                dataset.add_item(data['id'], emb, grad, data['label'])
+                dataset.add_item(data["id"], emb, grad, data["label"])
         
         # Save features
         if save_path is not None:

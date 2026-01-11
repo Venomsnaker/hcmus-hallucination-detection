@@ -31,12 +31,12 @@ class PairedDetectorModule(nn.Module):
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, output_dim)
-        self.register_buffer('ws', ws)
+        self.register_buffer("ws", ws)
 
     def forward(self, features):
-        '''
+        """
         features: list = [[emb1, grad1], ]emb2, grad2]]
-        '''
+        """
         emb1 = get_mean(features[0][0])
         grad1 = get_mean(features[0][1])
         emb2 = get_mean(features[1][0])
