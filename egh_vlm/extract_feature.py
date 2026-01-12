@@ -113,4 +113,7 @@ def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None,
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    # Final save
+    save_features(dataset, save_path)
     return dataset

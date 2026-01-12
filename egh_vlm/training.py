@@ -14,7 +14,8 @@ def train_detector(detector: DetectorModule, loss_function, optim, data_loader: 
 
         id, emb, grad, label = batch
         label = label.float()
-        output = detector(emb, grad).squeeze()
+        # output = detector(emb, grad).squeeze()
+        output = detector(emb, grad).squeeze(-1)
         loss = loss_function(output, label)
         loss.backward()
         optim.step()

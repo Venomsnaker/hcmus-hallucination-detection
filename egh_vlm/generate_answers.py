@@ -72,8 +72,6 @@ def generate_answers(save_path, folder_path, file_name, img_dir_name="images", s
                     {"type": "text", "text": data["question"] + "\nAnswer ONLY in this exact format, make sure you add the explanation: yes/no, explanation based on what you see in the image."}],
             }
         ]
-        # For testing purpose
-        # response = "yes, test answer."
         response = get_response(messages, model, processor)
         
         data["qwen3_vl_2b_response"] = response
