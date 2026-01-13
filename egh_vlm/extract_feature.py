@@ -80,7 +80,7 @@ def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = N
     emb, grad = extract_features_pipeline(model_bundle, context_messages, answer_messages)
     return emb, grad
 
-def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None, save_path: str=None, save_interval=20):
+def batch_extract_features(data_list, model_bundle: ModelBundle, features: HallucinationDataset=None, mask_mode=None, save_path: str=None, save_interval=20):
     '''
     mask_mode: None, "image" or "question"
     '''
@@ -88,9 +88,14 @@ def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None,
         print("Incorrect mask mode")
         return None
 
-    dataset = HallucinationDataset()
+    if features is None:
+        features = HallucinationDataset()
+    processed_ids = set(features.ids)
 
     for data in tqdm(data_list, desc="Extract features:"):
+        if data["id"] in processed_ids:
+            continue
+
         emb, grad = extract_features(
             model_bundle,
             answer = data["answer"],
@@ -102,12 +107,12 @@ def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None,
         # Exclude empty, NaN, and inf features 
         if emb.numel() > 0 and grad.numel() > 0:
             if not torch.isnan(emb).any() and not torch.isinf(emb).any() and not torch.isnan(grad).any() and not torch.isinf(grad).any():
-                dataset.add_item(data["id"], emb, grad, data["label"])
+                features.add_item(data["id"], emb, grad, data["label"])
         
         # Save features
         if save_path is not None:
-            if len(dataset) % save_interval == 0:
-                save_features(dataset, save_path)
+            if len(features) % save_interval == 0:
+                save_features(features, save_path)
 
         # Clean up
         gc.collect()
@@ -115,5 +120,5 @@ def batch_extract_features(data_list, model_bundle: ModelBundle, mask_mode=None,
             torch.cuda.empty_cache()
 
     # Final save
-    save_features(dataset, save_path)
-    return dataset
+    save_features(features, save_path)
+    return features

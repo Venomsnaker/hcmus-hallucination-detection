@@ -24,10 +24,8 @@ def get_response(messages, model, processor, max_new_tokens=64):
         generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
     return output_text[0] if len(output_text) == 1 else output_text
 
-def generate_answers(save_path, folder_path, file_name, img_dir_name="images", sample_size=None, save_interval=20, ids_range=None):
+def generate_answers(save_path, dataset_path, img_folder_path, sample_size=None, save_interval=20, ids_range=None):
     # Load dataset
-    dataset_path = os.path.join(folder_path, file_name)
-    img_folder_path = os.path.join(folder_path, img_dir_name)
     res = []
     processed_ids = []
 
@@ -59,7 +57,7 @@ def generate_answers(save_path, folder_path, file_name, img_dir_name="images", s
     # Get responses
     batch = []
 
-    for data in tqdm(dataset, desc=f"Processing {file_name}:"):
+    for data in tqdm(dataset, desc=f"Processing:"):
         if data["id"] in processed_ids:
             continue
         

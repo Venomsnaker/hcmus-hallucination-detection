@@ -16,10 +16,10 @@ def get_verdict(response):
     else:
         return 0
     
-def save_dataset(dataset, file_path):
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+def save_dataset(dataset, save_path):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open(save_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, indent=4)
 
 def get_img_path(img_folder_path: str, img_name, dataset="phd") -> str:
@@ -42,9 +42,7 @@ def get_img_path(img_folder_path: str, img_name, dataset="phd") -> str:
         print("Dataset not recognized.")
         return ""
 
-def load_egh_dataset(folder_path, file_name, img_folder_name="images", sample_size=None) -> list:
-    dataset_path = os.path.join(folder_path, file_name)
-    img_folder_path = os.path.join(folder_path, img_folder_name)
+def load_egh_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
     dataset = []
 
     with open(dataset_path, "r", encoding="utf-8") as f:
@@ -58,9 +56,7 @@ def load_egh_dataset(folder_path, file_name, img_folder_name="images", sample_si
     print(f"Successfully load the EHG dataset with: {len(dataset)} samples.")
     return dataset
 
-def load_hallusion_bench_dataset(folder_path, file_name, img_folder_name="images", sample_size=None) -> list:
-    dataset_path = os.path.join(folder_path, file_name)
-    img_folder_path = os.path.join(folder_path, img_folder_name)
+def load_hallusion_bench_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
     dataset = []
 
     with open(dataset_path, "r", encoding="utf-8") as f:
@@ -83,9 +79,7 @@ def load_hallusion_bench_dataset(folder_path, file_name, img_folder_name="images
     print(f"Successfully load the Hallusion Bench dataset with: {len(dataset)} samples.")
     return dataset
 
-def load_phd_dataset(folder_path, file_name, img_folder_name="images", sample_size=None) -> list:
-    dataset_path = os.path.join(folder_path, file_name)
-    img_folder_path = os.path.join(folder_path, img_folder_name)
+def load_phd_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
     dataset = []
 
     with open(dataset_path, "r", encoding="utf-8") as f:
