@@ -7,11 +7,10 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from egh_vlm.utils import get_img_path, get_pred
 
 
-
 def save_dataset(dataset, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
-    with open(save_path, "w", encoding="utf-8") as f:
+    with open(save_path, 'w', encoding='utf-8') as f:
         json.dump(dataset, f, indent=4)
 
 def get_response(messages, model, processor, max_new_tokens=64):
@@ -33,7 +32,7 @@ def get_response(messages, model, processor, max_new_tokens=64):
 
 def generate_raw_responses(save_path, dataset_path, img_folder_path, prompt_path, sample_size=None, save_interval=20, ids_range=None):
     # Load dataset
-    res = []
+    result = []
     processed_ids = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
@@ -47,8 +46,8 @@ def generate_raw_responses(save_path, dataset_path, img_folder_path, prompt_path
     # Load processed dataset
     if os.path.exists(save_path):
         with open(save_path, 'r', encoding='utf-8') as f:
-            res = json.load(f)
-    processed_ids = [data['id'] for data in res]
+            result = json.load(f)
+    processed_ids = [data['id'] for data in result]
 
     # Load prompt
     with open(prompt_path, 'r', encoding='utf-8') as file:
@@ -87,23 +86,24 @@ def generate_raw_responses(save_path, dataset_path, img_folder_path, prompt_path
         
         # Post-processing
         data['qwen3_vl_2b_response'] = response
+        # Assign hallucination label based on yes/no in the response
         hallucinated_label = 0 if get_pred(response) == data['label'] else 1
         data['hallucinated_label'] = hallucinated_label
         batch.append(data)
 
         if len(batch) > save_interval:
-            res.extend(batch)
-            save_dataset(res, save_path)
+            result.extend(batch)
+            save_dataset(result, save_path)
             batch.clear()
     if batch:
-        res.extend(batch)
-        save_dataset(res, save_path)
-    print(f'Completed. Dataset size: {len(res)}')
-    return res
+        result.extend(batch)
+        save_dataset(result, save_path)
+    print(f'Completed. Dataset size: {len(result)}')
+    return result
 
 def generate_enhanced_responses_baseline(save_path, dataset_path, img_folder_path, prompt_path, sample_size=None, save_interval=20, ids_range=None):
     # Load dataset
-    res = []
+    result = []
     processed_ids = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
@@ -117,8 +117,8 @@ def generate_enhanced_responses_baseline(save_path, dataset_path, img_folder_pat
     # Load processed dataset
     if os.path.exists(save_path):
         with open(save_path, 'r', encoding='utf-8') as f:
-            res = json.load(f)
-    processed_ids = [data['id'] for data in res]
+            result = json.load(f)
+    processed_ids = [data['id'] for data in result]
 
     # Load prompt
     with open(prompt_path, 'r', encoding='utf-8') as file:
@@ -169,11 +169,11 @@ def generate_enhanced_responses_baseline(save_path, dataset_path, img_folder_pat
         batch.append(data)
 
         if len(batch) > save_interval:
-            res.extend(batch)
-            save_dataset(res, save_path)
+            result.extend(batch)
+            save_dataset(result, save_path)
             batch.clear()
     if batch:
-        res.extend(batch)
-        save_dataset(res, save_path)
-    print(f'Completed. Dataset size: {len(res)}')
-    return res
+        result.extend(batch)
+        save_dataset(result, save_path)
+    print(f'Completed. Dataset size: {len(result)}')
+    return result

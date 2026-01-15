@@ -23,6 +23,16 @@ class HallucinationDataset(Dataset):
         self.grads.append(grad)
         self.labels.append(label)
 
+def hallucination_collate_fn(batch):
+    ids, embs, grads, labels = [], [], [], []
+
+    for sample in batch:
+        ids.append(sample[0])
+        embs.append(sample[1])
+        grads.append(sample[2])
+        labels.append(sample[3])
+    return ids, embs, grads, torch.tensor(labels)
+
 class PairedHallucinationDataset(Dataset):
     def __init__(self, ids=[], embs1=[], grads1=[], embs2=[], grads2 = [], labels=[]):
         self.ids = ids
@@ -48,6 +58,18 @@ class PairedHallucinationDataset(Dataset):
         self.embs2.append(feats[1][0])
         self.grads2.append(feats[1][1])
         self.labels.append(label)
+
+def paired_hallucination_collate_fn(batch):
+    ids, embs1, grads1, embs2, grads2, labels = [], [], [], [], [], []
+
+    for sample in batch:
+        ids.append(sample[0])
+        embs1.append(sample[1])
+        grads1.append(sample[2])
+        embs2.append(sample[3])
+        grads2.append(sample[4])
+        labels.append(sample[5])
+    return ids, embs1, grads1, embs2, grads2, torch.tensor(labels)
 
 def save_features(dataset, path):
     torch.save({
@@ -78,25 +100,3 @@ def split_stratified(dataset, train_ratio=0.7, random_state=42):
     train_dataset = torch.utils.data.Subset(dataset, train_idx)
     test_dataset = torch.utils.data.Subset(dataset, test_idx)
     return train_dataset, test_dataset
-
-def hallucination_collate_fn(batch):
-    ids, embs, grads, labels = [], [], [], []
-
-    for sample in batch:
-        ids.append(sample[0])
-        embs.append(sample[1])
-        grads.append(sample[2])
-        labels.append(sample[3])
-    return ids, embs, grads, torch.tensor(labels)
-
-def paired_hallucination_collate_fn(batch):
-    ids, embs1, grads1, embs2, grads2, labels = [], [], [], [], [], []
-
-    for sample in batch:
-        ids.append(sample[0])
-        embs1.append(sample[1])
-        grads1.append(sample[2])
-        embs2.append(sample[3])
-        grads2.append(sample[4])
-        labels.append(sample[5])
-    return ids, embs1, grads1, embs2, grads2, torch.tensor(labels)
