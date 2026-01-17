@@ -120,5 +120,6 @@ def batch_extract_features(data_list, model_bundle: ModelBundle, features: Hallu
             torch.cuda.empty_cache()
 
     # Final save
-    save_features(features, save_path)
+    if save_path is not None:
+        save_features(features, save_path)
     return features
