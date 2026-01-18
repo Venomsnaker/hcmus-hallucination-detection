@@ -41,8 +41,9 @@ class PairedDetectorModule(nn.Module):
         grad1 = get_mean(features[0][1])
         emb2 = get_mean(features[1][0])
         grad2 = get_mean(features[1][1])
-       
-        x = torch.sum(self.ws.unsqueeze(1) * torch.stack([emb1, grad1, emb2, grad2], dim=0), dim=0)      
+
+        weights = self.ws.view(4, 1, 1)
+        x = torch.sum(weights * torch.stack([emb1, grad1, emb2, grad2], dim=0), dim=0)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)

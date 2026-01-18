@@ -29,7 +29,7 @@ def train_paired_detector(detector: PairedDetectorModule, loss_function, optim, 
 
         id, emb1, grad1, emb2, grad2, label = batch
         label = label.float()
-        output = detector([[emb1, grad1], [emb2, grad2]]).squeeze()
+        output = detector([[emb1, grad1], [emb2, grad2]]).squeeze(-1)
         loss = loss_function(output, label)
         loss.backward()
         optim.step()

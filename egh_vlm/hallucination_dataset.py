@@ -17,6 +17,14 @@ class HallucinationDataset(Dataset):
     def __getitem__(self, idx):
         return self.ids[idx], self.embs[idx], self.grads[idx], self.labels[idx]
     
+    def get_by_id(self, id):
+        try:
+            idx = self.ids.index(id)
+            return self.__getitem__(idx)
+        except ValueError:
+            return None
+    
+
     def add_item(self, id, emb, grad, label):
         self.ids.append(id)
         self.embs.append(emb)
