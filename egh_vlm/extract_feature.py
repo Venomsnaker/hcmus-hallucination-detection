@@ -5,10 +5,24 @@ import torch
 from egh_vlm.hallucination_dataset import HallucinationDataset, save_features
 from egh_vlm.utils import ModelBundle
 
+def start_timer():
+    start = torch.cuda.Event(enable_timing=True)
+    start.record()
+    return start
+
+def end_timer(start):
+    end = torch.cuda.Event(enable_timing=True)
+    end.record()
+    torch.cuda.synchronize()
+    elapsed_time = start.elapsed_time(end) / 1000.0  # Convert to seconds
+    return elapsed_time
 
 def extract_features_pipeline(model_bundle: ModelBundle, context_messages: list, answer_messages: list):
     model, processor, device = model_bundle.model, model_bundle.processor, model_bundle.device
-
+    # timers = {}
+    
+    # Tokenize inputs
+    # t_tokenization = start_timer()
     c_ids = processor.apply_chat_template(
         context_messages, tokenize=True, add_generation_prompt=False, return_dict=True, return_tensors='pt'
     )
@@ -17,13 +31,19 @@ def extract_features_pipeline(model_bundle: ModelBundle, context_messages: list,
     )
     c_ids = {k: v.to(device) for k, v in c_ids.items()}
     a_ids = {k: v.to(device) for k, v in a_ids.items()}
+    # timers['tokenization'] = end_timer(t_tokenization)
 
     with torch.set_grad_enabled(True):
         model.eval()
 
+        # Forward pass
+        # t_forward = start_timer()
         c_output = model(**c_ids, output_hidden_states=True)
         a_output = model(**a_ids, output_hidden_states=True)
+        # timers['forward_pass'] = end_timer(t_forward)
 
+        # Gradient computation
+        # t_gradient = start_timer()
         c_length = c_ids['input_ids'].shape[1]
         a_length = a_ids['input_ids'].shape[1]
 
@@ -47,12 +67,21 @@ def extract_features_pipeline(model_bundle: ModelBundle, context_messages: list,
             grad = grad[0].squeeze(0)[1:, :]
         else:
             grad = torch.zeros_like(a_vector.squeeze(0)[1:, :])
+        # timers['gradient_computation'] = end_timer(t_gradient)
 
         # Compute embedding
+        # t_embedding = start_timer()
         a_emb = a_vector.squeeze(0)[1:, :]
         c_emb = c_vector.squeeze(0)[c_length - a_length + 1:, :]
         emb = c_emb - a_emb
-    return emb.detach().float().to('cpu'), grad.detach().float().to('cpu')
+        # timers['embedding_computation'] = end_timer(t_embedding)
+
+    # t_post = start_timer()
+    res_emb = emb.detach().float().to('cpu')
+    res_grad = grad.detach().float().to('cpu')
+    # timers['post_processing'] = end_timer(t_post)
+    # print(f"Timing breakdown: {timers}")
+    return res_emb, res_grad
 
 def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None):
     '''

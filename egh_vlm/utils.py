@@ -89,7 +89,6 @@ def load_phd_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
             'image_path': get_img_path(img_folder_path, data['image_id'], 'phd'),
             'label': data['hallucinated_label'],
             'task': data['task'],
-            'context': data['context'],
             'hitem': data['hitem'],
             'subject': data['subject'],
             'gt': data['gt'],
