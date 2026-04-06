@@ -4,7 +4,10 @@ import torch
 
 from egh_vlm.utils import ModelBundle
 
-def extract_output_pipeline(model_bundle: ModelBundle, messages: list):
+def extract_outputs_pipeline(model_bundle: ModelBundle, messages: list):
+    """
+    Return model output and input_ids tokenization length.
+    """
     model, processor, device = model_bundle.model, model_bundle.processor, model_bundle.device
     
     # Tokenize inputs
@@ -18,9 +21,12 @@ def extract_output_pipeline(model_bundle: ModelBundle, messages: list):
 
         # Forward pass
         tensor_output = model(**ids, output_hidden_states=True)
-    return tensor_output, ids['input_ids'].shape[1]
+    return {
+        'output': tensor_output,
+        'tokenization_length': ids['input_ids'].shape[1]
+    }
 
-def extract_output(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None):
+def extract_outputs(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None):
     '''
     mask_mode: None, 'all', 'image', or 'question'
     '''
@@ -39,9 +45,7 @@ def extract_output(model_bundle: ModelBundle, answer: str, image_path: str = Non
     if context != []:
         messages.append({'role': 'user', 'content': context})
     messages.append({'role': 'assistant', 'content': [{'type': 'text', 'text': answer}]})
-    
-    output, tokenization_length = extract_output_pipeline(model_bundle, messages)
-    return output, tokenization_length
+    return extract_outputs_pipeline(model_bundle, messages)
 
 def batch_extract_output(dataset, model_bundle: ModelBundle, processed_outputs: dict=None, mask_mode=None, save_path=None, save_interval=100):
     '''
@@ -52,26 +56,30 @@ def batch_extract_output(dataset, model_bundle: ModelBundle, processed_outputs: 
         return None
     
     if processed_outputs is None:
-        processed_outputs = {}
-    processed_ids = set(processed_outputs.keys())
+        processed_outputs = []
+    processed_ids = set([item['id'] for item in processed_outputs])
 
     for data in tqdm(dataset, desc='Extract output:'):
         if data['id'] in processed_ids:
             continue
 
-        tensor_output, tokenization_length = extract_output(
+        result = extract_outputs(
             model_bundle= model_bundle,
-            answer=data['answer'],
-            image_path=data['image_path'],
+            answer = data['answer'],
+            image_path = data['image_path'],
             question=data['question'],
-            mask_mode=mask_mode
+            mask_mode=mask_mode,
         )
-        processed_outputs[data['id']] = {
+        tensor_output = result['output']
+        tokenization_length = result['tokenization_length']
+
+        processed_outputs.append({
+            'id': data['id'],
             'last_hidden_states': tensor_output.hidden_states[-1].detach().cpu(),
             'logits': tensor_output.logits.detach().cpu(),
             'tokenization_length': tokenization_length,
             'label': data['label']
-        }
+        })
         
         # Save outputs
         if save_path is not None and len(processed_outputs) % save_interval == 0:

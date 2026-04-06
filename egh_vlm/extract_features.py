@@ -2,7 +2,7 @@ from tqdm import tqdm
 import gc
 import torch
 
-from egh_vlm.hallucination_dataset import HallucinationDataset, save_feature
+from egh_vlm.hallu_dataset import HalluDataset, save_hallu_dataset
 from egh_vlm.utils import ModelBundle
 
 def start_timer():
@@ -17,7 +17,10 @@ def end_timer(start):
     elapsed_time = start.elapsed_time(end) / 1000.0  # Convert to seconds
     return elapsed_time
 
-def extract_feature_pipeline(model_bundle: ModelBundle, context_messages: list, answer_messages: list, targeted_layer: int = -1):
+def extract_features_pipeline(model_bundle: ModelBundle, context_messages: list, answer_messages: list, targeted_layer: int = -1):
+    """
+    Return embedding and gradient features
+    """
     model, processor, device = model_bundle.model, model_bundle.processor, model_bundle.device
     # timers = {}
     
@@ -75,15 +78,14 @@ def extract_feature_pipeline(model_bundle: ModelBundle, context_messages: list, 
         c_emb = c_vector.squeeze(0)[c_length - a_length + 1:, :]
         emb = c_emb - a_emb
         # timers['embedding_computation'] = end_timer(t_embedding)
-
-    # t_post = start_timer()
-    res_emb = emb.detach().float().to('cpu')
-    res_grad = grad.detach().float().to('cpu')
-    # timers['post_processing'] = end_timer(t_post)
+        
     # print(f"Timing breakdown: {timers}")
-    return res_emb, res_grad
+    return {
+        'emb': emb.detach().float().to('cpu'),
+        'grad': grad.detach().float().to('cpu')
+    }
 
-def extract_feature(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None, targeted_layer: int = -1):
+def extract_features(model_bundle: ModelBundle, answer: str, image_path: str = None, question: str = None, mask_mode=None, targeted_layer: int = -1):
     '''
     mask_mode: None, 'image' or 'question'
     targeted_layer: The layer index from which to extract features
@@ -106,9 +108,7 @@ def extract_feature(model_bundle: ModelBundle, answer: str, image_path: str = No
     answer_messages = [
         {'role': 'assistant', 'content': [{'type': 'text', 'text': answer}]}
     ]
-
-    emb, grad = extract_feature_pipeline(model_bundle, context_messages, answer_messages, targeted_layer=targeted_layer)
-    return emb, grad
+    return extract_features_pipeline(model_bundle, context_messages, answer_messages, targeted_layer=targeted_layer)
 
 def batch_extract_feature(dataset, model_bundle: ModelBundle, processed_features: HallucinationDataset=None, mask_mode=None, targeted_layer: int = -1, save_path: str=None, save_interval=20):
     '''
@@ -120,21 +120,23 @@ def batch_extract_feature(dataset, model_bundle: ModelBundle, processed_features
         return None
 
     if processed_features is None:
-        processed_features = HallucinationDataset()
+        processed_features = HalluDataset()
     processed_ids = set(processed_features.ids)
 
     for data in tqdm(dataset, desc='Extract features:'):
         if data['id'] in processed_ids:
             continue
         
-        emb, grad = extract_feature(
-            model_bundle,
+        result = extract_features(
+            model_bundle= model_bundle,
             answer = data['answer'],
             image_path = data['image_path'],
             question=data['question'],
             mask_mode=mask_mode,
             targeted_layer=targeted_layer
         )
+        emb = result['emb']
+        grad = result['grad']
 
         # Exclude empty, NaN, and inf features
         has_non_empty_features = emb.numel() > 0 and grad.numel() > 0
@@ -152,7 +154,7 @@ def batch_extract_feature(dataset, model_bundle: ModelBundle, processed_features
         
         # Save features
         if save_path is not None and len(processed_features) % save_interval == 0:
-            save_feature(processed_features, save_path)
+            save_hallu_dataset(processed_features, save_path)
 
         # Clean up
         gc.collect()
@@ -161,5 +163,5 @@ def batch_extract_feature(dataset, model_bundle: ModelBundle, processed_features
 
     # Save final features
     if save_path is not None:
-        save_feature(processed_features, save_path)
+        save_hallu_dataset(processed_features, save_path)
     return processed_features

@@ -19,7 +19,7 @@ def get_pred(response):
 
 def get_img_path(img_folder_path: str, img_name, dataset='phd') -> str:
     '''
-    dataset: 'egh_vlm', 'phd', 'hallusion_bench', or 'halo_quest'
+    dataset: 'egh_vlm', 'phd', or 'hallusion_bench'
     '''
     if dataset == 'egh_vlm':
         return os.path.join(img_folder_path, img_name)
@@ -35,70 +35,68 @@ def get_img_path(img_folder_path: str, img_name, dataset='phd') -> str:
         return ''
     elif dataset == 'hallusion_bench':
         return img_folder_path + img_name[1:]
-    elif dataset == 'halo_quest': 
-        return ""
     else:
         print('Dataset not recognized.')
         return ''
 
-def load_egh_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
+def load_egh_dataset(dataset_path: str, img_folder_path: str, sample_size: int=None) -> list:
     dataset = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
-    if sample_size is not None and len(raw_data) > sample_size:
-        raw_data = raw_data[:sample_size]
+        raw_dataset = json.load(f)
+    if sample_size is not None and len(raw_dataset) > sample_size:
+        raw_dataset = raw_dataset[:sample_size]
 
-    for data in raw_data:
-        data['image_path'] = get_img_path(img_folder_path, data['image_id'], 'egh_vlm')
-        dataset.append(data)
+    for item in raw_dataset:
+        item['image_path'] = get_img_path(img_folder_path, item['image_id'], 'egh_vlm')
+        dataset.append(item)
     print(f'Successfully load the EHG dataset with: {len(dataset)} samples.')
     return dataset
 
-def load_hallusion_bench_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
+def load_hallusion_bench_dataset(dataset_path: str, img_folder_path: str, sample_size: int=None) -> list:
     dataset = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
-    if sample_size is not None and len(raw_data) > sample_size:
-        raw_data = raw_data[:sample_size]
+        raw_dataset = json.load(f)
+    if sample_size is not None and len(raw_dataset) > sample_size:
+        raw_dataset = raw_dataset[:sample_size]
 
-    for data in raw_data:
+    for item in raw_dataset:
         dataset.append({
-            'id': data['id'],
-            'category': data['category'],
-            'subcategory': data['subcategory'],
-            'question': data['question'],
-            'image_path': get_img_path(img_folder_path, data['filename'], 'hallusion_bench'),
-            'gt_answer': data['gt_answer'],
-            'gt_answer_label': int(data['gt_answer_label']),
-            'answer': data['qwen3_vl_2b_response'],
-            'label': data['hallucinated_label'],
+            'id': item['id'],
+            'category': item['category'],
+            'subcategory': item['subcategory'],
+            'question': item['question'],
+            'image_path': get_img_path(img_folder_path, item['filename'], 'hallusion_bench'),
+            'gt_answer': item['gt_answer'],
+            'gt_answer_label': int(item['gt_answer_label']),
+            'answer': item['qwen3_vl_2b_response'],
+            'label': item['hallucinated_label'],
         })
     print(f'Successfully load the Hallusion Bench dataset with: {len(dataset)} samples.')
     return dataset
 
-def load_phd_dataset(dataset_path, img_folder_path, sample_size=None) -> list:
+def load_phd_dataset(dataset_path: str, img_folder_path: str, sample_size: int=None) -> list:
     dataset = []
 
     with open(dataset_path, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
-    if sample_size is not None and len(raw_data) > sample_size:
-        raw_data = raw_data[:sample_size]
+        raw_dataset = json.load(f)
+    if sample_size is not None and len(raw_dataset) > sample_size:
+        raw_dataset = raw_dataset[:sample_size]
 
-    for data in raw_data:
+    for item in raw_dataset:
         dataset.append({
-            'id': data['id'],
-            'couple_idx': data['couple_idx'],
-            'task': data['task'],
-            'hitem': data['hitem'],
-            'subject': data['subject'],
-            'gt': data['gt'],
-            'question': data['question'],
-            'image_path': get_img_path(img_folder_path, data['image_id'], 'phd'),
-            'question_gt': data['question_gt'],
-            'answer': data['qwen3_vl_2b_response'],
-            'label': data['hallucinated_label'],
+            'id': item['id'],
+            'couple_idx': item['couple_idx'],
+            'task': item['task'],
+            'hitem': item['hitem'],
+            'subject': item['subject'],
+            'gt': item['gt'],
+            'question': item['question'],
+            'image_path': get_img_path(img_folder_path, item['image_id'], 'phd'),
+            'question_gt': item['question_gt'],
+            'answer': item['qwen3_vl_2b_response'],
+            'label': item['hallucinated_label'],
         })
     print(f'Successfully load the PhD dataset with: {len(dataset)} samples.')
     return dataset
