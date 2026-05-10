@@ -1,5 +1,3 @@
-import numpy as np
-from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset
 
@@ -55,16 +53,3 @@ def load_hallu_dataset(path):
         checkpoint['embs'],
         checkpoint['grads'],
         checkpoint['labels'])
-
-def split_stratified(dataset, train_ratio=0.7, random_state=42):
-    labels = np.array(dataset.labels)
-
-    train_idx, test_idx = train_test_split(
-        range(len(dataset)),
-        test_size=1-train_ratio,
-        stratify=labels,
-        random_state=random_state
-    )
-    train_dataset = torch.utils.data.Subset(dataset, train_idx)
-    test_dataset = torch.utils.data.Subset(dataset, test_idx)
-    return train_dataset, test_dataset

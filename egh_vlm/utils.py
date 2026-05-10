@@ -1,7 +1,9 @@
 import os
 import json
 from dataclasses import dataclass
+import numpy as np
 import torch
+from sklearn.model_selection import train_test_split
 
 
 @dataclass
@@ -82,3 +84,16 @@ def load_phd_dataset(dataset_path: str, img_folder_path: str, sample_size: int=N
         })
     print(f'Successfully load the PhD dataset with: {len(dataset)} samples.')
     return dataset
+
+def split_stratified(dataset, train_ratio=0.7, random_state=42):
+    labels = np.array(dataset.labels)
+
+    train_idx, test_idx = train_test_split(
+        range(len(dataset)),
+        test_size=1-train_ratio,
+        stratify=labels,
+        random_state=random_state
+    )
+    train_dataset = torch.utils.data.Subset(dataset, train_idx)
+    test_dataset = torch.utils.data.Subset(dataset, test_idx)
+    return train_dataset, test_dataset
