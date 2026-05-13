@@ -3,7 +3,7 @@ import gc
 from dataclasses import dataclass
 
 import torch
-from sklearn.metrics import accuracy_score, auc, f1_score, precision_recall_curve, precision_score, recall_score
+from sklearn.metrics import accuracy_score, auc, f1_score, precision_recall_curve
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -231,20 +231,38 @@ class ThresholdDetector:
         self.metric_type = metric_type
         self.threshold = threshold
 
+    def _is_higher_score_better(self):
+        return self.metric_type in ['entropy_mean', 'entropy_max']
+
     def score(self, entropy_mean: torch.Tensor, entropy_max: torch.Tensor, prob_mean: torch.Tensor, prob_max: torch.Tensor):
         if self.metric_type == 'entropy_mean':
-            return entropy_mean.float()
+            return self._reduce_scores(entropy_mean, reduce='mean')
         if self.metric_type == 'entropy_max':
-            return entropy_max.float()
+            return self._reduce_scores(entropy_max, reduce='max')
         if self.metric_type == 'prob_mean':
-            return prob_mean.float()
-        return prob_max.float()
+            return self._reduce_scores(prob_mean, reduce='mean')
+        return self._reduce_scores(prob_max, reduce='max')
+
+    @staticmethod
+    def _reduce_scores(score: torch.Tensor, reduce: str):
+        score = score.float()
+        if score.ndim <= 1:
+            return score.reshape(-1)
+
+        score = score.reshape(score.shape[0], -1)
+        if reduce == 'mean':
+            return score.mean(dim=1)
+        if reduce == 'max':
+            return score.max(dim=1).values
+        raise ValueError("reduce must be 'mean' or 'max'")
 
     def predict(self, entropy_mean: torch.Tensor, entropy_max: torch.Tensor, prob_mean: torch.Tensor, prob_max: torch.Tensor):
         if self.threshold is None:
             raise ValueError('Detector threshold is not trained.')
         scores = self.score(entropy_mean, entropy_max, prob_mean, prob_max)
-        return scores >= self.threshold
+        if self._is_higher_score_better():
+            return scores >= self.threshold
+        return scores <= self.threshold
 
 def train_threshold_detector(detector: ThresholdDetector, data_loader: DataLoader):
     total_label, total_score = [], []
@@ -255,14 +273,32 @@ def train_threshold_detector(detector: ThresholdDetector, data_loader: DataLoade
         score = torch.nan_to_num(score, nan=0.0, posinf=1.0, neginf=0.0)
 
         total_label += label.cpu().tolist()
-        total_score += score.cpu().tolist()
+        total_score += score.cpu().reshape(-1).tolist()
 
-    thresholds = sorted(set(total_score))
+    if not total_score:
+        detector.threshold = 0.0
+        return {
+            'threshold': detector.threshold,
+            'f1': 0.0
+        }
+
+    sorted_scores = sorted(total_score)
+    num_thresholds = min(1000, len(sorted_scores))
+    if num_thresholds == 1:
+        thresholds = [sorted_scores[0]]
+    else:
+        sampled_indices = torch.linspace(0, len(sorted_scores) - 1, steps=num_thresholds).round().long().tolist()
+        thresholds = [sorted_scores[idx] for idx in sampled_indices]
+        thresholds = sorted(set(thresholds))
+
     best_f1 = -1.0
     best_threshold = thresholds[0] if thresholds else 0.0
 
     for threshold in thresholds:
-        total_pred = [int(score >= threshold) for score in total_score]
+        if detector._is_higher_score_better():
+            total_pred = [int(score >= threshold) for score in total_score]
+        else:
+            total_pred = [int(score <= threshold) for score in total_score]
         f1 = f1_score(total_label, total_pred, zero_division=0)
         if f1 > best_f1:
             best_f1 = f1
@@ -285,20 +321,17 @@ def eval_threshold_detector(detector: ThresholdDetector, data_loader: DataLoader
             pred = detector.predict(entropy_mean, entropy_max, prob_mean, prob_max)
 
             total_label += label.cpu().tolist()
-            total_pred += pred.cpu().tolist()
-            total_score += score.cpu().tolist()
+            total_pred += pred.cpu().reshape(-1).tolist()
+            total_score += score.cpu().reshape(-1).tolist()
 
         acc = accuracy_score(total_label, total_pred)
         f1 = f1_score(total_label, total_pred, zero_division=0)
-        precision_score_value = precision_score(total_label, total_pred, zero_division=0)
-        recall_score_value = recall_score(total_label, total_pred, zero_division=0)
-        precision, recall, cm = precision_recall_curve(total_label, total_score)
-        pr_auc = auc(recall, precision)
+        pr_scores = total_score if detector._is_higher_score_better() else [-score for score in total_score]
+        precision_curve, recall_curve, _ = precision_recall_curve(total_label, pr_scores)
+        pr_auc = auc(recall_curve, precision_curve)
 
     return {
         'acc': acc,
         'f1': f1,
-        'precision': precision_score_value,
-        'recall': recall_score_value,
         'pr_auc': pr_auc
     }

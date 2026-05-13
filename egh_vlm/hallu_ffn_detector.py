@@ -62,7 +62,7 @@ def train_ffn_detector(detector: HalluFFNDetector, loss_fn: nn.Module, optim: to
     return total_loss
 
 def eval_ffn_detector(detector: HalluFFNDetector, data_loader: DataLoader):
-    total_label, total_pred = [], []
+    total_label, total_pred, total_score = [], [], []
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(data_loader):
@@ -75,9 +75,10 @@ def eval_ffn_detector(detector: HalluFFNDetector, data_loader: DataLoader):
             # Collect pred and label
             total_label += label.cpu().tolist()
             total_pred += list(map(lambda x: round(x), output.cpu().tolist()))
+            total_score += output.cpu().tolist()
         acc = accuracy_score(total_label, total_pred)
         f1 = f1_score(total_label, total_pred)
-        precision, recall, cm = precision_recall_curve(total_label, total_pred)
+        precision, recall, cm = precision_recall_curve(total_label, total_score)
         pr_auc = auc(recall, precision)
     return {
         'acc': acc,
