@@ -98,36 +98,3 @@ def split_stratified(dataset, train_ratio=0.7, random_state=42):
     train_dataset = torch.utils.data.Subset(dataset, train_idx)
     test_dataset = torch.utils.data.Subset(dataset, test_idx)
     return train_dataset, test_dataset
-
-def create_balanced_dataloader(
-    dataset,
-    batch_size: int = 32,
-    collate_fn=None,
-    seed: int = 42,
-):
-    if isinstance(dataset, torch.utils.data.Subset):
-        labels = np.array(dataset.dataset.labels)[dataset.indices]
-    else:
-        labels = np.array(dataset.labels)
-
-    class_counts = np.bincount(labels.astype(int))
-    class_weights = np.zeros_like(class_counts, dtype=np.float64)
-    non_empty_classes = class_counts > 0
-    class_weights[non_empty_classes] = 1.0 / class_counts[non_empty_classes]
-    sample_weights = class_weights[labels.astype(int)]
-
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-
-    sampler = WeightedRandomSampler(
-        weights=torch.as_tensor(sample_weights, dtype=torch.double),
-        num_samples=len(sample_weights),
-        replacement=True,
-        generator=generator,
-    )
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        sampler=sampler,
-        collate_fn=collate_fn,
-    )

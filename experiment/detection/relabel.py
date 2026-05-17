@@ -68,6 +68,9 @@ Important rules:
   - Judge the EXPLANATION's content, not the leading yes/no token.
   - "Asserts X" means the explanation states X as a fact about the image,
     not as a possibility or a denial.
+  - CRITICAL: Denying or negating X is NOT asserting X. If the explanation
+    says "there is no suitcase" or "it is not a hippopotamus", set
+    claims_hitem=false — the model is denying hitem, not asserting it.
   - For counting tasks, numerical equivalents count (e.g. "three" == "3").
   - For attribute/positional/sentiment, paraphrases and synonyms count
     (e.g. "domed" == "dome-shaped", "to the left" == "on the left side").
@@ -170,11 +173,12 @@ class GPTJudge:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-5.4-nano",
         temperature: float = 0.0,
         max_tokens: int = 200,
         retries: int = 3,
         retry_sleep_s: float = 1.5,
+        batch_size: int = 10,
     ):
         from openai import OpenAI  # lazy import so the module loads without the dep
         self.client = OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
@@ -183,47 +187,93 @@ class GPTJudge:
         self.max_tokens = max_tokens
         self.retries = retries
         self.retry_sleep_s = retry_sleep_s
+        self.batch_size = batch_size
 
     def judge(self, task, subject, gt, hitem, question, answer) -> JudgeResult:
-        user_msg = JUDGE_USER_TEMPLATE.format(
-            task=task, subject=subject, gt=gt, hitem=hitem,
-            question=question or "(not provided)",
-            answer=(answer or "").strip(),
-        )
-        last_err = None
-        for attempt in range(self.retries):
-            try:
-                resp = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=self.temperature,
-                    max_completion_tokens=self.max_tokens,
-                    response_format={"type": "json_object"},
-                )
-                raw = resp.choices[0].message.content
-                obj = json.loads(raw)
-                cg = _parse_bool(obj.get("claims_gt"))
-                ch = _parse_bool(obj.get("claims_hitem"))
-                conf = float(obj.get("confidence", 0.0))
-                reason = str(obj.get("reason", ""))[:300]
-                # Note: question_gt is not passed to judge, so we use derive_label without it
-                # The caller (relabel_dataset) will recalculate label with question_gt if available
-                return JudgeResult(
-                    claims_gt=cg, claims_hitem=ch, confidence=conf,
-                    reason=reason, label_content=derive_label(cg, ch), question_gt=None, raw=raw,
-                )
-            except Exception as e:  # noqa: BLE001
-                last_err = e
-                if attempt + 1 < self.retries:
-                    time.sleep(self.retry_sleep_s * (attempt + 1))
-        # All retries failed -> mark as drop with reason.
-        return JudgeResult(
-            claims_gt=None, claims_hitem=None, confidence=0.0,
-            reason=f"judge_error: {last_err}", label_content=-1, question_gt=None, raw="",
-        )
+        """Single item judgment (legacy compatibility)."""
+        results = self.judge_batch([{
+            "task": task, "subject": subject, "gt": gt, "hitem": hitem,
+            "question": question, "answer": answer
+        }])
+        return results[0]
+
+    def judge_batch(self, items: list[dict]) -> list[JudgeResult]:
+        """Batch judgment for faster inference.
+        
+        Args:
+            items: List of dicts with keys: task, subject, gt, hitem, question, answer
+            
+        Returns:
+            List of JudgeResult objects (same order as input)
+        """
+        if not items:
+            return []
+            
+        # Process in batches to respect API limits
+        all_results = []
+        for i in range(0, len(items), self.batch_size):
+            batch = items[i:i + self.batch_size]
+            batch_results = self._process_batch(batch)
+            all_results.extend(batch_results)
+            
+        return all_results
+    
+    def _process_batch(self, batch: list[dict]) -> list[JudgeResult]:
+        """Process a single batch of items using individual API calls."""
+        results = []
+        
+        for item in batch:
+            user_msg = JUDGE_USER_TEMPLATE.format(
+                task=item["task"], subject=item["subject"], gt=item["gt"], hitem=item["hitem"],
+                question=item.get("question", "(not provided)"),
+                answer=(item.get("answer", "")).strip(),
+            )
+            
+            last_err = None
+            for attempt in range(self.retries):
+                try:
+                    resp = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_msg},
+                        ],
+                        temperature=self.temperature,
+                        max_completion_tokens=self.max_tokens,
+                        response_format={"type": "json_object"},
+                    )
+                    
+                    raw = resp.choices[0].message.content
+                    try:
+                        obj = json.loads(raw)
+                        cg = _parse_bool(obj.get("claims_gt"))
+                        ch = _parse_bool(obj.get("claims_hitem"))
+                        conf = float(obj.get("confidence", 0.0))
+                        reason = str(obj.get("reason", ""))[:400]
+                        results.append(JudgeResult(
+                            claims_gt=cg, claims_hitem=ch, confidence=conf,
+                            reason=reason, label_content=derive_label(cg, ch), question_gt=None, raw=raw,
+                        ))
+                        break  # Success, move to next item
+                    except json.JSONDecodeError as e:
+                        results.append(JudgeResult(
+                            claims_gt=None, claims_hitem=None, confidence=0.0,
+                            reason=f"json_error: {e}", label_content=-1, question_gt=None, raw=raw,
+                        ))
+                        break  # Move to next item even if JSON parsing fails
+                        
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    if attempt + 1 < self.retries:
+                        time.sleep(self.retry_sleep_s * (attempt + 1))
+                    else:
+                        # All retries failed for this item
+                        results.append(JudgeResult(
+                            claims_gt=None, claims_hitem=None, confidence=0.0,
+                            reason=f"judge_error: {last_err}", label_content=-1, question_gt=None, raw="",
+                        ))
+        
+        return results
 
 
 def relabel_dataset(
@@ -240,9 +290,10 @@ def relabel_dataset(
 
     Resumable: if save_path exists and skip_existing, items already labeled there
     are kept and not re-judged.
+    
+    Batch processing: If judge is a GPTJudge with batch_size > 1, uses batch processing
+    for significantly faster inference.
     """
-    judge_fn = judge.judge if isinstance(judge, GPTJudge) else judge
-
     # Resume support
     existing = {}
     if save_path and skip_existing and os.path.exists(save_path):
@@ -250,21 +301,89 @@ def relabel_dataset(
             for r in json.load(f):
                 existing[r["id"]] = r
 
-    out: list[dict] = []
-    n_done_since_save = 0
-    n_cached = 0
-    n_new = 0
     items = list(dataset)
+    # Separate cached and new items
+    new_items = [item for item in items if item["id"] not in existing]
+    cached_items = [existing[item["id"]] for item in items if item["id"] in existing]
+    
+    n_cached = len(cached_items)
+    n_new = len(new_items)
+    
     desc = f"Relabel ({judge.model if isinstance(judge, GPTJudge) else 'judge'})"
     if existing:
-        desc += f" | {len(existing)} cached"
+        desc += f" | {n_cached} cached"
+    
+    out = cached_items.copy()
+    
+    if not new_items:
+        print(f"\n[Relabel complete] Total: {len(out)} | Cached: {n_cached} | Newly judged: 0")
+        return out
 
-    for item in tqdm(items, desc=desc):
-        if item["id"] in existing:
-            out.append(existing[item["id"]])
-            n_cached += 1
-            continue
-        n_new += 1
+    # Use batch processing if available
+    if isinstance(judge, GPTJudge) and hasattr(judge, 'batch_size') and judge.batch_size > 1:
+        print(f"Using batch processing with batch_size={judge.batch_size}")
+        return _relabel_batch(new_items, judge, out, save_path, save_every, desc)
+    else:
+        # Fallback to single-item processing
+        judge_fn = judge.judge if isinstance(judge, GPTJudge) else judge
+        return _relabel_single(new_items, judge_fn, out, save_path, save_every, desc)
+
+
+def _relabel_batch(new_items: list[dict], judge: GPTJudge, out: list[dict], 
+                   save_path: str | None, save_every: int, desc: str) -> list[dict]:
+    """Batch processing implementation."""
+    n_done_since_save = 0
+    
+    # Process in batches
+    for i in tqdm(range(0, len(new_items), judge.batch_size), desc=desc):
+        batch = new_items[i:i + judge.batch_size]
+        batch_items = [{
+            "task": item["task"], "subject": item["subject"],
+            "gt": item["gt"], "hitem": item["hitem"],
+            "question": item.get("question"), "answer": item.get("answer"),
+        } for item in batch]
+        
+        results = judge.judge_batch(batch_items)
+        
+        # Process results
+        for item, result in zip(batch, results):
+            # Recalculate label with question_gt if available
+            qgt = item.get("question_gt")
+            if qgt is not None:
+                label_content = derive_label(result.claims_gt, result.claims_hitem, int(qgt))
+            else:
+                label_content = result.label_content
+
+            new_item = {
+                **item,
+                "claims_gt": result.claims_gt,
+                "claims_hitem": result.claims_hitem,
+                "judge_conf": result.confidence,
+                "label_content": label_content,
+                "judge_reason": result.reason,
+            }
+            out.append(new_item)
+            n_done_since_save += 1
+        
+        # Save checkpoint
+        if save_path and n_done_since_save >= save_every:
+            _atomic_save(out, save_path)
+            print(f"  [Checkpoint] Saved {len(out)} samples to {save_path}")
+            n_done_since_save = 0
+
+    if save_path:
+        _atomic_save(out, save_path)
+
+    print(f"\n[Relabel complete] Total: {len(out)} | Cached: {len(out) - len(new_items)} | Newly judged: {len(new_items)}")
+    return out
+
+
+def _relabel_single(new_items: list[dict], judge_fn: Callable, out: list[dict],
+                    save_path: str | None, save_every: int, desc: str) -> list[dict]:
+    """Single-item processing implementation (fallback)."""
+    n_done_since_save = 0
+    
+    for item in tqdm(new_items, desc=desc):
         r = judge_fn(
             task=item["task"], subject=item["subject"],
             gt=item["gt"], hitem=item["hitem"],
@@ -295,7 +414,7 @@ def relabel_dataset(
     if save_path:
         _atomic_save(out, save_path)
 
-    print(f"\n[Relabel complete] Total: {len(out)} | Cached: {n_cached} | Newly judged: {n_new}")
+    print(f"\n[Relabel complete] Total: {len(out)} | Cached: {len(out) - len(new_items)} | Newly judged: {len(new_items)}")
     return out
 
 
